@@ -5,16 +5,16 @@ By: Refaldi Intri Dwi Putra -  Department of Information and Communication Engin
 
 Created as a final report for Visual Media 2024.
 
-This repo is structured as
-
-.
-|-- home 
-|     |-- report.pdf
-|     |-- code      
-|         |-- data         
-|         |-- src          
-|         |-- analysis.ipynb
-
+This repo is structured as         
+    
+    .
+    ├── home 
+    │     ├── report.pdf
+    │     └── code      
+    │           ├── data         
+    │           ├── src          
+    │           └── analysis.ipynb
+    └── ...
 ## What's in this report?
 
 - A 4-pages report named "report.pdf" that describing the detail of chosen paper, its contributions, and overview of the proposed approach. The report also includes my attempt to implement some of their results.
