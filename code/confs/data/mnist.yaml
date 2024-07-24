@@ -1,0 +1,4 @@
+data_dir: '/Users/refaldi/Documents/Work/grokking/data/MNIST'
+data_code: 'mnist'
+batch_size: 128
+num_workers: 0

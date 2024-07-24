@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+  - data : mnist
+  - model: mlp
+  - wandb: wandb
+  - train: train
+#  - override hydra/hydra_logging: disabled # this is to disable the output
+#  - override hydra/job_logging: disabled # this is too.
+#  - model: mlp
+
+#hydra:
+#  output_subdir: null # This is for disabling the output
+#  run:
+#    dir: . # this is too.
