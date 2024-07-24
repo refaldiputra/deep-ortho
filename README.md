@@ -7,15 +7,13 @@ Created as a final report for Visual Media 2024.
 
 This repo is structured as
 
-home - report.pdf
-
-      |- code
-      
-          |- data
-          
-          |- src
-          
-          |- analysis.ipynb
+.
+|-- home 
+|     |-- report.pdf
+|     |-- code      
+|         |-- data         
+|         |-- src          
+|         |-- analysis.ipynb
 
 ## What's in this report?
 
