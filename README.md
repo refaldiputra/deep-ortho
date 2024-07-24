@@ -8,16 +8,17 @@ Created as a final report for Visual Media 2024.
 This repo is structured as         
     
     .
-    ├── home 
-    │     ├── report.pdf
-    │     └── code      
-    │           ├── data         
-    │           ├── src          
-    │           └── analysis.ipynb
-    └── ...
+    ├── code      
+    │    ├── confs          <- Hydra       
+    │    ├── logs           <- log outputs
+    │    ├── scripts        <- Shell
+    │    ├── src            <- Program code
+    │    └── analysis.ipynb <- Data analysis
+    ├── README.md
+    └── report.pdf          <- Report for this class
 ## What's in this report?
 
-- A 4-pages report named "report.pdf" that describing the detail of chosen paper, its contributions, and overview of the proposed approach. The report also includes my attempt to implement some of their results.
+- A 6-pages report named "report.pdf" that describing the detail of chosen paper, its contributions, and overview of the proposed approach. The report also includes my attempt to implement some of their results.
 
 ## How is my implementation in code?
 
