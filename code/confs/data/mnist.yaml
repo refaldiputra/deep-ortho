@@ -1,4 +1,6 @@
-data_dir: '/Users/refaldi/Documents/Work/grokking/data/MNIST'
-data_code: 'mnist'
-batch_size: 128
-num_workers: 0
+data_dir: './data/MNIST'
+code: 'mnist'
+build:
+  _target_ : src.mnist.MNIST # this must be the same as the imported module path
+  normal: 1
+  batch_size: 200

@@ -1,9 +1,9 @@
 defaults:
   - _self_
-  - data : mnist
-  - model: mlp
+  - data : cifar
+  - model: cnnvae #mlp
   - wandb: wandb
-  - train: train
+  - trainer: train
 #  - override hydra/hydra_logging: disabled # this is to disable the output
 #  - override hydra/job_logging: disabled # this is too.
 #  - model: mlp

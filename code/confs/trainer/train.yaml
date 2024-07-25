@@ -1,0 +1,16 @@
+code: trainer
+build:
+  _target_: src.trainer.Trainer
+optimizer:
+  _target_: torch.optim.Adam
+  lr : 0.001
+  weight_decay : 0.0
+scheduler:
+  _target_: torch.optim.lr_scheduler.StepLR
+  step_size : 10
+  gamma : 0.1
+epochs: 5
+save_path: './models'
+load_path: './models'
+mode: pretrain
+method: dohsc
