@@ -74,8 +74,8 @@ class CIFAR10_Dataset():
                                         transforms.Lambda(lambda x: global_contrast_normalization(x, scale='l1')),
                                         transforms.Normalize([min_max[normal][0]] * 3,
                                                              [min_max[normal][1] - min_max[normal][0]] * 3)]
-        # transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-        #                      std=[0.247, 0.243, 0.261])]
+#         transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
+#                              std=[0.247, 0.243, 0.261])]
         )
 
         target_transform = transforms.Lambda(lambda x: int(x in self.outlier_classes))

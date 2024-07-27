@@ -2,6 +2,6 @@ data_dir: './data/CIFAR10'
 code: 'cifar'
 build:
   _target_ : src.cifar.CIFAR10_Dataset # this must be the same as the imported module path
-  normal: 1
+  normal: 8
 # separated because the function is different
 batch_size: 200

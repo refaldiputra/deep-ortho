@@ -2,15 +2,25 @@ code: trainer
 build:
   _target_: src.trainer.Trainer
 optimizer:
+  _target_: torch.optim.SGD
+  lr : 1e-3
+  weight_decay : 1e-6
+optimizer_enc:
   _target_: torch.optim.Adam
-  lr : 0.001
-  weight_decay : 0.0
-scheduler:
+  lr : 1e-2
+  weight_decay : 1e-6
+scheduler_lr:
   _target_: torch.optim.lr_scheduler.StepLR
-  step_size : 10
+  step_size : 20
   gamma : 0.1
-epochs: 5
+scheduler_multi:
+  _target_: torch.optim.lr_scheduler.MultiStepLR
+  milestones: [750]
+  gamma : 0.1 
+epochs_ae: 10
+epochs_enc: 20
+nu : 0.03
 save_path: './models'
 load_path: './models'
 mode: pretrain
-method: dohsc
+method: dohsc #do2hsc

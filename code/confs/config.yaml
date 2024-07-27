@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - data : cifar
-  - model: cnnvae #mlp
+  - model: cnn #mlp
   - wandb: wandb
   - trainer: train
 #  - override hydra/hydra_logging: disabled # this is to disable the output

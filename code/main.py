@@ -1,3 +1,4 @@
+import os
 import wandb
 import hydra
 from typing import Optional
@@ -6,27 +7,29 @@ from omegaconf import DictConfig
 import logging
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
-from src.model import MLP, ConvNet, VAE, VAEskip, OrthogonalProjector, VAEOrtho
+from src.model import MLP, ConvNet, AE, AEskip, OrthogonalProjector, AEOrtho, EncOrtho, AEskipOrtho, Enc, Orthogonal_Projector_try, weightConstraint, pretrain_autoencoder_cifar
 from src.data import Dataset
 #from src.mnist import get_mnist
 import src.mnist
 import src.cifar
 import src.trainer
+from src.trainer2 import Trainer
+#from torch.utils.tensorboard import SummaryWriter
 
-log = logging.getLogger(__name__)
+log = logging.getLogger(__name__) # logger for the main function
 
-
+# this is the preambule for the hydra configuration
 @hydra.main(config_path="./confs", config_name="config.yaml", version_base="1.2")
 
 def main(cfg:DictConfig) -> Optional[float]:
-    ### This is for the wandb configuration
+    ### This is for the wandb configuration when combined with hydra
     wandb.config = omegaconf.OmegaConf.to_container(cfg, 
     resolve=True
     ,throw_on_missing=True
     )
 #    print(wandb.config)
 
-#    wandb.init(entity=cfg.wandb.entity, project = cfg.wandb.project)
+#    wandb.init(entity=cfg.wandb.entity, project = cfg.wandb.project) # for sending results to wandb
 #    print(cfg)
 #    print("Hello world")
 #    print (cfg.model)
@@ -34,75 +37,100 @@ def main(cfg:DictConfig) -> Optional[float]:
 #    params = torch.Tensor([[1,2,3],[1,4,3]], device = torch.device('cpu'))
 #    opt = hydra.utils.instantiate(cfg.model.optimizer, [params])
 #    print(opt)
+    #################### Name Handler ####################
+    # for a code of this run as well as for the save path of the model
+    # basic information is data_code, normal class, model_code, method, and nu
+    # detailed information including optimizers, schedulers, epochs
 
-    log.info("Info message")
-    log.warning("Warning message")
+    basic_info = f"{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}_{cfg.trainer.nu}"
+    detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}"
 
-    # inspect the data file
+    ae_path_save = f"./models/{basic_info}_ae.pth"
+    center_path_save = f"./models/{basic_info}_center.pth"
+    enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
+    enc_path_save_do2hsc = f"./models/{basic_info}_enc_do2hsc.pth"
+
+    #################### Logger ####################
+
+    log.info("This run is for %s", detailed_info)
+
+
     #################### Data ####################
+    # we are going to have normal data and outlier data (2 kind only and fix the class)
+    # if we want to change the class, we need to override the data.build
     if cfg.data.code == 'mnist':
-#    data = get_mnist(cfg.data.normal, cfg.data.batch_size)
         train_loader, test_loader = hydra.utils.instantiate(cfg.data.build).get_mnist()
-#        print(data.data.shape)
-    # cifar
-    else:
+    else: #cifar
         data = hydra.utils.instantiate(cfg.data.build)
-        train_loader, test_loader = data.get_loaders(cfg.data.batch_size) #, cfg.data.test_batch_size)
-#    #print(len(data.train_set))
-#        print(train_loader)
+        train_loader, test_loader = data.get_loaders(cfg.data.batch_size)
 
     #################### Model ####################
-    # initiate the model
-    # model = MLP(cfg.model.net.input, cfg.model.net.output, cfg.model.net.width, cfg.model.net.depth)
-    ### Calling the model from the config file
-    ### If model is changed, it needs to be specified first.
+    # Calling the model from the config file
+    # If model is changed, it needs to be specified first from model.code
     if cfg.model.code == 'mlp':
-        model  = MLP(**cfg.model.net)
-    elif cfg.model.code == 'cnnvae':
-#        input_model = torch.randn(200, 3, 32, 32)
-        model = VAEOrtho(wandb.config['model'])
-#        print(data.test_set[:][0].shape)
-#        x_, z = model(data.test_set[:100][0])
-#        print(x_.shape, z.shape)
-#    print(input_model.shape)
-#    print(wandb.config['model']['encoder'])
-#    cnn = ConvNet(**wandb.config['model']['encoder']['block1'])
-#    print(cnn)
-#    model = VAEskip(wandb.config['model'])
-#    x_, z = model(input_model)
-#    print(x_.shape)
-#### for ortho
-#    latent = torch.randn(200,128)
-#    ortho = OrthogonalProjector(**wandb.config['model']['ortho'])
-#    print(ortho(latent))
-    #check orthogonality
-#    Z_ortho = ortho(latent).t() @ ortho(latent)
-    # distance from identity matrix
-#    print(torch.norm(Z_ortho - torch.eye(Z_ortho.shape[0], device = Z_ortho.device)))
-    #tensor(1.9696e-05, grad_fn=<LinalgVectorNormBackward0>) (seems okay)
-#    print(ortho(latent).t() @ ortho(latent))
-#    model = MLP(**wandb.config['model']['net'])
-#################### Trainer ####################
-    opt = hydra.utils.instantiate(cfg.trainer.optimizer, model.parameters())
-    scheduler = hydra.utils.instantiate(cfg.trainer.scheduler, optimizer=opt)
-    trainer = hydra.utils.instantiate(cfg.trainer.build, model=model, optimizer=opt, scheduler=scheduler)
-#    trainer.inference(test_loader)
-#    trainer.fit(train_loader, cfg.trainer.epochs) #only train dataset
-#    trainer.inference(test_loader) # to test the model after the model is trained
-    c = trainer.center(train_loader) # to get the center of the latent space
-    print(c.shape)
-    list_module = model.state_dict()
-    print(list_module.keys())
+        model_ae  = MLP(**cfg.model.net) # skip for time being
+    elif cfg.model.code == 'cnn':
+        model_ae = AEOrtho(wandb.config['model']) # Autoencoder
+        model_enc = EncOrtho(wandb.config['model']) # Encoder only
+    #for checking the model visualization
+#    writer = SummaryWriter()
+#    writer.add_graph(model_ae, input_to_model=torch.randn(200, 3, 32, 32))
+    #################### Trainer ####################
+    ####### autoencoder training (pretrain)
+    # check if there is already a model saved with the basic_info
+    # if there is, load the model
+    # if not, train the model first
+    if not os.path.exists(ae_path_save):
+        opt_ae = hydra.utils.instantiate(cfg.trainer.optimizer, model_ae.parameters())
+        scheduler_ae = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_ae)
+        trainer_ae = hydra.utils.instantiate(cfg.trainer.build, model=model_ae, optimizer=opt_ae, scheduler=scheduler_ae)
+        trainer_ae.train_ae(train_loader, cfg.trainer.epochs_ae)
+        c = trainer_ae.center(train_loader) # to get the center of the latent space
+        trainer_ae.save_model(ae_path_save,center_path_save)
+        print("Center and model are initialized")
+    if not os.path.exists(enc_path_save_dohsc) and cfg.trainer.method != 'do2hsc':
+    ####### encoder training (DOHSC)
+        print("Starting DOHSC")
+        model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
+        load_center = torch.load(center_path_save)
+        opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
+        scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
+        trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, model=model_enc, optimizer=opt_enc, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu)
+        trainer_dohsc.inference(test_loader)
+        trainer_dohsc.train_enc(train_loader, cfg.trainer.epochs_enc)
+        trainer_dohsc.inference(test_loader)
+        trainer_dohsc.save_model_enc(enc_path_save_dohsc)
+        print("DOHSC is done and model is saved")
+    else: print("For DO2HSC later")
+    ####### encoder training (DO2HSC)
+
+if __name__ == "__main__":
+    main()
+
+
+
+################### Below is the prototyping code ###################
+#    trainer_center.fit_init(train_loader, cfg.trainer.epochs_enc,mode='center')
+#    trainer_center.inference(test_loader)
+#    list_module = model.state_dict()
+#    print(list_module.keys())
     #get the weight
-    print(list_module['ortho.linear.weight'])
+#    print(list_module['ortho.linear.weight'])
 
     ### we can just run DO2HSC all at once
 
-    if cfg.trainer.mode == 'pretrain': #aka DOHSC
-        trainer.save_model(cfg.trainer.save_path)
-    else:
-        if cfg.trainer.method == 'dohsc':
-            trainer.load_model(cfg.trainer.load_path)
+#    if cfg.trainer.initial == 'pretrain': # A must
+#        trainer.save_model_ae(cfg.trainer.save_path.ae)
+#    else:
+        #trainer.load_model_ae(cfg.trainer.load_path.ae)
+#    if cfg.trainer.dohsc == 'load':
+#           trainer.load_model_enc(cfg.trainer.load_path.dohsc)
+#    else: from scratch
+#           trainer.save_model_enc(cfg.trainer.save_path.dohsc)
+#    if cfg.trainer.do2hsc == 'load':
+#       trainer.load_model_enc(cfg.trainer.load_path.do2hsc)
+#   else: #from scratch
+#       trainer.save_model_enc(cfg.trainer.save_path.do2hsc)     
     ### this is to initiate the optimizer for the learning
 #    
 #    print(model)
@@ -130,5 +158,24 @@ def main(cfg:DictConfig) -> Optional[float]:
 #    test_loader = data.test_loader(cfg.data.batch_size)
 #    print(train_loader.dataset.data.shape)
 #    print(test_loader.dataset.data.shape)
-if __name__ == "__main__":
-    main()
+
+#    print(input_model.shape)
+#    print(wandb.config['model']['encoder'])
+#    cnn = ConvNet(**wandb.config['model']['encoder']['block1'])
+#    print(cnn)
+#    model = VAEskip(wandb.config['model'])
+#    x_, z = model(input_model)
+#    print(x_.shape)
+#### for ortho
+#    latent = torch.randn(200,128)
+#    ortho = OrthogonalProjector(**wandb.config['model']['ortho'])
+#    ortho = Orthogonal_Projector_try(32)
+#    ortho.apply(weightConstraint(latent))
+#    print(ortho(latent))
+    #check orthogonality
+#    Z_ortho = ortho(latent).t() @ ortho(latent)
+    # distance from identity matrix
+#    print(torch.norm(Z_ortho - torch.eye(Z_ortho.shape[0], device = Z_ortho.device)))
+    #tensor(1.9696e-05, grad_fn=<LinalgVectorNormBackward0>) (seems okay)
+#    print(ortho(latent).t() @ ortho(latent))
+#    model = MLP(**wandb.config['model']['net'])

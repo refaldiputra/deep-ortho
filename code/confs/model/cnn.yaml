@@ -1,4 +1,4 @@
-code: cnnvae
+code: cnn
 encoder:
   block1: 
     in_channels: 3
@@ -21,7 +21,7 @@ encoder:
 
 decoder:
   block1:
-    in_channels: 8
+    in_channels: 2 #2 if dim_z = 32, 8 if dim_z = 128
     out_channels: 128
     kernel_size: 5
     padding: 2
@@ -46,7 +46,7 @@ decoder:
 
 mid:
   in_features: 2048 #128*4*4
-  out_features: 128
+  out_features: 32
 
 ortho:
-  dim: 128
+  dim: 32
