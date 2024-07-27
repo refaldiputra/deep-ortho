@@ -14,6 +14,7 @@ import src.mnist
 import src.cifar
 import src.trainer
 from src.trainer2 import Trainer
+import numpy as np
 #from torch.utils.tensorboard import SummaryWriter
 
 log = logging.getLogger(__name__) # logger for the main function
@@ -22,38 +23,39 @@ log = logging.getLogger(__name__) # logger for the main function
 @hydra.main(config_path="./confs", config_name="config.yaml", version_base="1.2")
 
 def main(cfg:DictConfig) -> Optional[float]:
+    ## random seed configuration, for reproducibility
+    torch.manual_seed(cfg.seed)
+    torch.cuda.manual_seed(cfg.seed)
+    torch.cuda.manual_seed_all(cfg.seed)
+    np.random.seed(cfg.seed)
+
+    ## the device configuration (auto assign to cuda if available)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print('You are using: ', device)
+
     ### This is for the wandb configuration when combined with hydra
     wandb.config = omegaconf.OmegaConf.to_container(cfg, 
     resolve=True
     ,throw_on_missing=True
     )
-#    print(wandb.config)
-
-#    wandb.init(entity=cfg.wandb.entity, project = cfg.wandb.project) # for sending results to wandb
-#    print(cfg)
-#    print("Hello world")
-#    print (cfg.model)
-#    print (cfg.model.name)
-#    params = torch.Tensor([[1,2,3],[1,4,3]], device = torch.device('cpu'))
-#    opt = hydra.utils.instantiate(cfg.model.optimizer, [params])
-#    print(opt)
+    # wandb.init(entity=cfg.wandb.entity, project = cfg.wandb.project) # for sending results to wandb
     #################### Name Handler ####################
     # for a code of this run as well as for the save path of the model
     # basic information is data_code, normal class, model_code, method, and nu
     # detailed information including optimizers, schedulers, epochs
 
-    basic_info = f"{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}_{cfg.trainer.nu}"
+    basic_info = f"{cfg.seed}_{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}"
     detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}"
 
     ae_path_save = f"./models/{basic_info}_ae.pth"
     center_path_save = f"./models/{basic_info}_center.pth"
-    enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
+    enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
     enc_path_save_do2hsc = f"./models/{basic_info}_enc_do2hsc.pth"
 
     #################### Logger ####################
 
     log.info("This run is for %s", detailed_info)
-
+    logger_set = {'show':True, 'update_step':2}
 
     #################### Data ####################
     # we are going to have normal data and outlier data (2 kind only and fix the class)
@@ -73,8 +75,8 @@ def main(cfg:DictConfig) -> Optional[float]:
         model_ae = AEOrtho(wandb.config['model']) # Autoencoder
         model_enc = EncOrtho(wandb.config['model']) # Encoder only
     #for checking the model visualization
-#    writer = SummaryWriter()
-#    writer.add_graph(model_ae, input_to_model=torch.randn(200, 3, 32, 32))
+    # writer = SummaryWriter()
+    # writer.add_graph(model_ae, input_to_model=torch.randn(200, 3, 32, 32))
     #################### Trainer ####################
     ####### autoencoder training (pretrain)
     # check if there is already a model saved with the basic_info
@@ -83,9 +85,9 @@ def main(cfg:DictConfig) -> Optional[float]:
     if not os.path.exists(ae_path_save):
         opt_ae = hydra.utils.instantiate(cfg.trainer.optimizer, model_ae.parameters())
         scheduler_ae = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_ae)
-        trainer_ae = hydra.utils.instantiate(cfg.trainer.build, model=model_ae, optimizer=opt_ae, scheduler=scheduler_ae)
-        trainer_ae.train_ae(train_loader, cfg.trainer.epochs_ae)
-        c = trainer_ae.center(train_loader) # to get the center of the latent space
+        trainer_ae = hydra.utils.instantiate(cfg.trainer.build, model=model_ae, optimizer=opt_ae, train_loader=train_loader, test_loader=test_loader, scheduler=scheduler_ae, logger_kwargs=logger_set, device=device)
+        trainer_ae.train_ae(cfg.trainer.epochs_ae)
+        trainer_ae.center() # to get the center of the latent space
         trainer_ae.save_model(ae_path_save,center_path_save)
         print("Center and model are initialized")
     if not os.path.exists(enc_path_save_dohsc) and cfg.trainer.method != 'do2hsc':
@@ -95,10 +97,10 @@ def main(cfg:DictConfig) -> Optional[float]:
         load_center = torch.load(center_path_save)
         opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
         scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
-        trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, model=model_enc, optimizer=opt_enc, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu)
-        trainer_dohsc.inference(test_loader)
-        trainer_dohsc.train_enc(train_loader, cfg.trainer.epochs_enc)
-        trainer_dohsc.inference(test_loader)
+        trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, logger_kwargs=logger_set, device=device)
+        trainer_dohsc.inference()
+        trainer_dohsc.train_enc(cfg.trainer.epochs_enc, cfg.trainer.monitor)
+        trainer_dohsc.inference()
         trainer_dohsc.save_model_enc(enc_path_save_dohsc)
         print("DOHSC is done and model is saved")
     else: print("For DO2HSC later")
@@ -153,7 +155,6 @@ if __name__ == "__main__":
 #    data = Dataset(cfg.data.data_code)
 #    print(data.data_dir)
 #    data.generate() # this is to download the data, run only at the first time
-    # It is saved in /Users/refaldi/Documents/Work/deep-ortho/code/data 
 #    train_loader = data.train_loader(cfg.data.batch_size)
 #    test_loader = data.test_loader(cfg.data.batch_size)
 #    print(train_loader.dataset.data.shape)

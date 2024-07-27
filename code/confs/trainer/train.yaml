@@ -19,7 +19,8 @@ scheduler_multi:
   gamma : 0.1 
 epochs_ae: 10
 epochs_enc: 20
-nu : 0.03
+monitor: False
+nu : 0.5
 save_path: './models'
 load_path: './models'
 mode: pretrain

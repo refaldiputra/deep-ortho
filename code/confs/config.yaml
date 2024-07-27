@@ -4,6 +4,7 @@ defaults:
   - model: cnn #mlp
   - wandb: wandb
   - trainer: train
+seed: 0
 #  - override hydra/hydra_logging: disabled # this is to disable the output
 #  - override hydra/job_logging: disabled # this is too.
 #  - model: mlp

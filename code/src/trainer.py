@@ -6,39 +6,27 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 
 class Trainer:
-    """Trainer
-    
-    Class that eases the training of a PyTorch model.
-    
-    Parameters
-    ----------
-    model : torch.Module
-        The model to train.
-    criterion : torch.Module
-        Loss function criterion.
-    optimizer : torch.optim
-        Optimizer to perform the parameters update.
-    logger_kwards : dict
-        Args for ..
-        
-    Attributes
-    ----------
-    train_loss_ : list
-    val_loss_ : list
+    """
+    This class is used to train the model. 
+    It can be used to train an initialization, dohsc and the do2hsc.
     
     """
     def __init__(
         self, 
-        model, 
-        optimizer,
-        scheduler=None,
-        center=None,
-        nu = 0.1,
-        logger_kwargs=None, 
-        device=None
+        model, # our model
+        optimizer, # our optimizer like Adam
+        train_loader, # training data
+        test_loader, # testing data
+        scheduler=None, # learning rate scheduler
+        center=None, # center of the latent space
+        nu = 0.3, # the quantile decision
+        logger_kwargs=None, # for the logging
+        device=None # device to use
     ):
         self.model = model
         self.optimizer = optimizer
+        self.train_loader = train_loader
+        self.test_loader = test_loader
         self.scheduler = scheduler
         self.C = center
         self.nu = nu
@@ -50,71 +38,106 @@ class Trainer:
 
         # attributes        
         self.train_loss_ = []
-        self.val_loss_ = []
-        self.idx_label_score_ = []
+        self.test_loss_ = []
+        self.label_score_ = []
 
         logging.basicConfig(level=logging.INFO)
 
-    def train_ae(self, train_loader, epochs):
+    def train_ae(self, epochs):
+        # the model is the autoencoder
         self.model.train()
+        total_start_time = time.time() # measuring the training time
         for epoch in range(epochs):
             total_loss = 0
-            for x, y, _ in train_loader:
-                x = x.float()
+            epoch_start_time = time.time() # measuring training time per epoch
+            for feature, label, _ in self.train_loader:
+                feature, label = self._to_device(feature.float(), label, self.device)
                 self.optimizer.zero_grad()
-                x_hat, _ = self.model(x)
-                reconst_loss = torch.mean(torch.sum((x_hat - x) ** 2, dim=tuple(range(1, x_hat.dim()))))
-                reconst_loss.backward()
+                reconst_feature, _ = self.model(feature) # get the reconstructed feature
+                # loss is the mean squared error
+                # loss_ae = torch.mean(torch.sum((reconst_feature - feature) ** 2, dim=tuple(range(1, reconst_feature.dim()))))
+                loss_ae = self._compute_scores(reconst_feature, feature)
+                loss_ae.backward()
                 self.optimizer.step()
-                total_loss += reconst_loss.item()
-#                print(f"Epoch: {epoch}, Train Loss: {reconst_loss.item()}")
-            epoch_loss = total_loss / len(train_loader)
-            print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
+                total_loss += loss_ae.item()
+            epoch_loss = total_loss / len(self.train_loader) # average loss per epoch
+            # print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
             self.scheduler.step()
 
-#            epoch_time = time.time() - epoch_start_time
-#            self._logger(
-#                tr_loss,  
-#                epoch+1, 
-#                epochs, 
-#                epoch_time,
-#                torch.sum(self.model.ortho.linear.weight.grad),
-#                torch.sum(self.model.encoder[0][0].weight.grad),
-#                **self.logger_kwargs
-#            )
+            # logging by epoch
+            epoch_time = time.time() - epoch_start_time
+            self._logger_train(
+                epoch_loss,  
+                epoch+1, 
+                epochs, 
+                epoch_time,
+                **self.logger_kwargs
+            )
 
-#        total_time = time.time() - total_start_time
+        total_time = time.time() - total_start_time
 
         # final message
-#        logging.info(
-#            f"""End of training. Total time: {round(total_time, 5)} seconds"""
-#        )
+        logging.info(
+            f"""End of training. Total time: {round(total_time, 5)} seconds"""
+        )
 
 
-    def train_enc(self, train_loader, epochs):
-        self.model.train()
+    def train_enc(self, epochs, monitor= False):
+        # the model is the encoder
+        total_start_time = time.time()
         for epoch in range(epochs):
+            self.model.train() # make sure the model is in training mode
             total_loss = 0
-            for x, y, _ in train_loader:
-                x = x.float()
+            epoch_start_time = time.time() # measuring training time per epoch
+            for feature, label, _ in self.train_loader:
+                feature, label = self._to_device(feature.float(), label, self.device)
                 self.optimizer.zero_grad()
-                z = self.model(x)
-                loss = self._compute_scores_nu(z, self.C, self.nu)
-                loss.backward()
+                z = self.model(feature) # get the compressed representation
+                ### DOHSC
+                # loss is the distance between the compressed representation and the center
+                # loss function by nu, this is known as soft-boundary deep SVDD: http://proceedings.mlr.press/v80/ruff18a/ruff18a.pdf
+                # I found this has faster convergence
+                # loss_enc = self._compute_scores(z, self.C)
+                loss_enc = self._compute_scores_nu(z, self.C, self.nu) 
+                loss_enc.backward()
                 self.optimizer.step()
-                total_loss += loss.item()
-#                print(f"Epoch: {epoch}, Train Loss: {loss.item()}")
-            epoch_loss = total_loss / len(train_loader)
-            print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
-            self.scheduler.step()        
+                total_loss += loss_enc.item()
+            epoch_loss = total_loss / len(self.train_loader) # average loss per epoch
+            # print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
+            self.scheduler.step()
+
+            # logging by epoch
+            epoch_time = time.time() - epoch_start_time
+            self._logger_train(
+                epoch_loss,  
+                epoch+1, 
+                epochs, 
+                epoch_time,
+                **self.logger_kwargs
+            )
+
+            # inference when epochs is module epoch_inference
+            epoch_inference = epochs // 2
+            try:
+                (epoch+1) % epoch_inference
+            except ZeroDivisionError:
+                epoch_inference = 1
+            if (epoch+1) % epoch_inference == 0 and monitor:
+                self.inference()
+
+        total_time = time.time() - total_start_time
+
+        # final message
+        logging.info(
+            f"""End of training. Total time: {round(total_time, 5)} seconds"""
+        )        
     
-    def _logger(
+    def _logger_train(
         self, 
         tr_loss, 
         epoch, 
         epochs, 
         epoch_time,
-        grad, 
         show=True, 
         update_step=2
     ):
@@ -123,114 +146,17 @@ class Trainer:
                 # to satisfy pep8 common limit of characters
                 msg = f"Epoch {epoch}/{epochs} | Train loss: {tr_loss}" 
                 msg = f"{msg} | Time/epoch: {round(epoch_time, 5)} seconds"
-                msg = f"{msg} | Grad: {grad}"
                 logging.info(msg)
-    def _logger_conv(
-        self, 
-        tr_loss, 
-        step,
-        epoch_time, 
-        show=True, 
-        update_step=2
-    ):
-        if show:
-            if step % update_step == 0 or step == 1:
-                # to satisfy pep8 common limit of characters
-                msg = f"Step: {step} | Train loss: {tr_loss}" 
-                msg = f"{msg} | Time/epoch: {round(epoch_time, 5)} seconds"
-
-                logging.info(msg)
-    
-    def _train_ae(self, loader):
-        '''
-        model is autoencoder here
-        '''
-        self.model.train()
-        
-        for features, labels, _ in loader:
-            # move to device
-            features, labels = self._to_device(features.float(), labels, self.device) # we only need the features actually
-            self.optimizer.zero_grad()
-            # forward pass
-            reconst_features,_ = self.model(features)
-            
-            # loss, distance between features and reconstructed features
-#            scores = self._compute_scores(reconst_features, features)
-            loss = torch.mean(torch.mean((reconst_features - features)**2, dim=tuple(range(1, reconst_features.dim()))))
-            # remove gradient from previous passes
-            
-            # backprop
-            loss.backward()
-            
-            # parameters update
-            self.optimizer.step()
-            
-        return loss.item()
-    
-    def _train_center(self, loader):
-        '''
-        model is encoder here
-        '''
-        self.model.train()
-        
-        for features, labels, _ in loader:
-            # move to device
-            features, labels = self._to_device(features.float()
-            , labels, self.device)
-
-            # forward pass
-            z = self.model(features)
-
-            # loss, distance between features and center
-            loss = self._compute_scores_nu(z, self.C, self.nu)
-#            dist = torch.square(z - self.C)
-#            scores = torch.sum(dist, dim=tuple(range(1, z.dim())))
-#            loss = torch.mean(scores)
-            # remove gradient from previous passes
-            self.optimizer.zero_grad()
-
-            # backprop
-            loss.backward()
-
-            # parameters update
-            self.optimizer.step()
-
-        return loss.item()
-
-    def _train_do2hsc(self, loader):
-        '''
-        model is encoder here
-        '''
-        self.model.train()
-        
-        for features, labels, _ in loader:
-            # move to device
-            features, labels = self._to_device(features, labels, self.device)
-
-            # forward pass
-            z = self.model(features)
-
-            # loss, distance between features and center
-            scores = self._compute_scores_do2shc(z, self.C, self.rmin, self.rmax)
-            loss = torch.mean(scores)
-            # remove gradient from previous passes
-            self.optimizer.zero_grad()
-
-            # backprop
-            loss.backward()
-
-            # parameters update
-            self.optimizer.step()
-
-        return loss.item()
     
     def _to_device(self, features, labels, device):
         return features.to(device), labels.to(device)
     
+    def _compute_dists(self, vector1, vector2):
+        return torch.sum((vector1 - vector2)**2, dim=1)
+    
     def _compute_scores(self, vector1, vector2):
-        scores = torch.sum((vector1 - vector2)**2, dim=1)
-#        scores = torch.sum((features - reconst_features)**2, dim=1)
-        return scores
+        scores = torch.sum((vector1 - vector2)**2, dim=tuple(range(1, vector1.dim())))
+        return torch.mean(scores)
     
     def _compute_scores_nu(self, vector1, vector2, nu):
         dist = torch.sum((vector1 - vector2)**2, dim=tuple(range(1, vector1.dim())))
@@ -244,6 +170,7 @@ class Trainer:
         d_max = torch.minimum(d, rmax)
         scores = torch.sum(d_max - d_min, dim=tuple(range(1, vector1.dim())))
         return scores
+    
     def _get_device(self, device):
         if device is None:
             dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -254,17 +181,15 @@ class Trainer:
 
         return dev
     
-    def inference(self, loader):
+    def inference(self):
+        # the model is the encoder
         self.model.eval()
-        
         with torch.no_grad():
             logging.info("Starting inference...")
             start_time = time.time()
-            loss_epoch = 0
             n_batches = 0
-            label_score = []
             label_dist = []
-            for features, labels, _ in loader:
+            for features, labels, _ in self.test_loader:
                 # move to device
                 features, labels = self._to_device(
                     features.float(), 
@@ -272,54 +197,40 @@ class Trainer:
                     self.device
                 )
                 
-#                reconst_features,_  = self.model(features)
                 out = self.model(features)
-                dist = self._compute_scores(out,self.C)
-#                dist_.append(dist)
-#                print(dist.shape)
- #               scores = self._compute_scores(reconst_features, features)
-#                self.r = self.get_radius(dist, self.nu)
-#                scores = dist - self.r**2
-#                print(scores, self.nu)
-#                loss = torch.mean(scores)
-#                scores = scores.view(-1)
+                dist = self._compute_dists(out,self.C)
+                # collect labels and dist to center
                 label_dist += list(zip(labels.cpu().data.numpy().tolist(),
                 dist.cpu().data.numpy().tolist())
                 )
-
-#                loss_epoch += loss.item()
                 n_batches += 1
 
-#            logging.info(f"Average loss: {loss_epoch/n_batches}")
-
-#            labels, scores = zip(*label_score)
+            # unpack labels and dists
             labels, dists = zip(*label_dist)
             labels = np.array(labels)
-#            scores = np.array(scores)
             dists = np.array(dists)
+            # get the radius based on the quantile
             r = self.get_radius(dists, self.nu)
-#            print(r)
+            # get the anomaly scores
             scores = dists - r**2
+            # assign the labels based on the scores
             scores[scores < 0] = int(0) #normal
             scores[scores > 0] = int(1) #anomaly
-#            print(labels, scores) 
-#            print(labels)
-#            print(list(scores.astype(int)))
-
+            # calculate the AUC, note the higher the better
+            # ROC AUC is intrepreted as the probability that a random positive sample will have a higher score than a random negative sample
+            # AUC = 0.5 means random guessing
             self.auc = roc_auc_score(labels, scores.astype(int))
-            logging.info(f"AUC: {self.auc}")
             test_time = time.time() - start_time
+            logging.info(f"AUC: {self.auc}")
             logging.info(f"End of inference. Total time: {round(test_time, 5)} seconds")
-            logging.info(f"Average time per batch: {round(test_time/n_batches, 5)} seconds")
-            logging.info("End of inference.")
     
-    def center(self, loader, eps = 0.1): # should be the train_loader
-        '''get the center of the latent space'''
+    def center(self, eps = 0.1): 
+        '''get the center of the latent space using training data'''
         self.model.eval()
         
         with torch.no_grad():
             Z = []
-            for features, labels, _ in loader:
+            for features, labels, _ in self.train_loader:
                 # move to device
                 features, labels = self._to_device(
                     features.float(), 
@@ -327,17 +238,18 @@ class Trainer:
                     self.device
                 )
                 
-                _, z  = self.model(features)
-                Z.append(z.detach())
-            Z = torch.cat(Z, dim=0)
-            self.C = torch.mean(Z, dim=0)
+                _, comp_features  = self.model(features) # compressed features
+                Z.append(comp_features.cpu())
+            Z = torch.cat(Z, dim=0) # concatenate all the compressed features
+            self.C = torch.mean(Z, dim=0) # get the center
+            # below is the trick for stability
             self.C[(abs(self.C) < eps) & (self.C < 0)] = -eps
             self.C[(abs(self.C) < eps) & (self.C > 0)] = eps
-        return self.C
     
     def save_model(self, path_model, path_center):
         '''
-        C : center of the latent space
+        Model should be autoencoder
+        Must generate the center first by center method
         '''
         if self.C is None: #just in case I forget to initialize
             raise ValueError('Center is not initialized')
@@ -346,7 +258,7 @@ class Trainer:
 
     def save_model_enc(self, path_model_enc):
         '''
-        C : center of the latent space
+        Model should be encoder after DOHSC or DO2HSC
         '''
         if self.C is None: #just in case I forget to initialize
             raise ValueError('Center is not initialized')
