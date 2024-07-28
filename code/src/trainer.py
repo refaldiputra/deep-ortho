@@ -44,7 +44,8 @@ class Trainer:
         self.model.to(self.device)
 
         # send center to device
-        self.C.to(self.device)
+        if self.C != None:
+            self.C.to(self.device)
 
         # attributes        
         self.train_loss_ = []

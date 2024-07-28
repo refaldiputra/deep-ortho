@@ -26,4 +26,4 @@ nu : 0.5
 save_path: './models'
 load_path: './models'
 mode: pretrain
-method: dohsc #do2hsc
+method: dohsc #do2hsc, base

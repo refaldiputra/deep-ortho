@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 import logging
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
-from src.model import AEOrtho, EncOrtho, MLP
+from src.model import AEOrtho, EncOrtho, MLP, AE, Enc, AEskipOrtho
 import numpy as np
 from src.utils import get_data_dir
 #from torch.utils.tensorboard import SummaryWriter
@@ -16,7 +16,7 @@ from src.utils import get_data_dir
 log = logging.getLogger(__name__) # logger for the main function
 
 # this is the preambule for the hydra configuration
-@hydra.main(config_path="./confs", config_name="config", version_base="1.2")
+@hydra.main(config_path="./confs", config_name="config.yaml", version_base="1.2")
 
 def main(cfg: DictConfig) -> Optional[float]:
     #################### Device Setting ####################
@@ -80,8 +80,14 @@ def main(cfg: DictConfig) -> Optional[float]:
     # If model is changed, it needs to be specified first from model.code
     if cfg.model.code == 'mlp':
         model_ae  = MLP(**cfg.model.net) # skip for time being
-    elif cfg.model.code == 'cnn':
+    elif cfg.model.code == 'cnn_base':
+        model_ae = AE(wandb.config['model'])
+        model_enc = Enc(wandb.config['model'])
+    elif cfg.model.code == 'cnn_ortho':
         model_ae = AEOrtho(wandb.config['model']) # Autoencoder
+        model_enc = EncOrtho(wandb.config['model']) # Encoder only
+    elif cfg.model.code == 'cnn_skip':
+        model_ae = AEskipOrtho(wandb.config['model']) # Autoencoder
         model_enc = EncOrtho(wandb.config['model']) # Encoder only
     #for checking the model visualization
     # writer = SummaryWriter()
@@ -100,7 +106,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         trainer_ae.save_model(ae_path_save,center_path_save)
         print("Center and model are initialized")
     else: print("AE model was trained before")
-    if not os.path.exists(enc_path_save_dohsc) and cfg.trainer.method == 'dohsc':
+    if not os.path.exists(enc_path_save_dohsc) and (cfg.trainer.method == 'dohsc' or cfg.trainer.method == 'base'):
     ####### encoder training (DOHSC)
         print("Starting DOHSC")
         model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
