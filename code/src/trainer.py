@@ -12,7 +12,8 @@ class Trainer:
     
     """
     def __init__(
-        self, 
+        self,
+        method, # either dohsc or do2hsc
         model, # our model
         optimizer, # our optimizer like Adam
         train_loader, # training data
@@ -23,6 +24,7 @@ class Trainer:
         logger_kwargs=None, # for the logging
         device=None # device to use
     ):
+        self.method = method
         self.model = model
         self.optimizer = optimizer
         self.train_loader = train_loader
@@ -169,7 +171,7 @@ class Trainer:
         d_min = torch.maximum(d, rmin) # will return another vector
         d_max = torch.minimum(d, rmax)
         scores = torch.sum(d_max - d_min, dim=tuple(range(1, vector1.dim())))
-        return scores
+        return torch.mean(scores)
     
     def _get_device(self, device):
         if device is None:
@@ -209,10 +211,17 @@ class Trainer:
             labels, dists = zip(*label_dist)
             labels = np.array(labels)
             dists = np.array(dists)
-            # get the radius based on the quantile
-            r = self.get_radius(dists, self.nu)
-            # get the anomaly scores
-            scores = dists - r**2
+            if self.method == 'dohsc':
+                # get the radius based on the quantile
+                r = self.get_radius(dists, self.nu)
+                # get the anomaly scores
+                scores = dists - r**2
+            else: # do2hsc
+                dist_sqrt = np.sqrt(dists)
+                # get the bi-radii based on the quantile
+                r_max,r_min = self.get_biradius(dist_sqrt, self.nu)
+                # get the anomaly scores
+                scores = (dist_sqrt - r_max) * (dist_sqrt-r_min)
             # assign the labels based on the scores
             scores[scores < 0] = int(0) #normal
             scores[scores > 0] = int(1) #anomaly
@@ -267,4 +276,9 @@ class Trainer:
     def get_radius(self, dist, nu: float):
         """Optimally solve for radius R via the (1-nu)-quantile of distances."""
         return np.quantile(np.sqrt(dist), 1 - nu)
+    
+    def get_biradius(self, dist_sqrt, nu):
+        r_min = np.quantile(dist_sqrt, nu)
+        r_max = np.quantile(dist_sqrt, 1 - nu)
+        return r_max, r_min
             

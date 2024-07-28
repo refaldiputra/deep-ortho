@@ -7,13 +7,7 @@ from omegaconf import DictConfig
 import logging
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
-from src.model import MLP, ConvNet, AE, AEskip, OrthogonalProjector, AEOrtho, EncOrtho, AEskipOrtho, Enc, Orthogonal_Projector_try, weightConstraint, pretrain_autoencoder_cifar
-from src.data import Dataset
-#from src.mnist import get_mnist
-import src.mnist
-import src.cifar
-import src.trainer
-from src.trainer2 import Trainer
+from src.model import AEOrtho, EncOrtho
 import numpy as np
 #from torch.utils.tensorboard import SummaryWriter
 
@@ -45,12 +39,12 @@ def main(cfg:DictConfig) -> Optional[float]:
     # detailed information including optimizers, schedulers, epochs
 
     basic_info = f"{cfg.seed}_{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}"
-    detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}"
+    detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}_{cfg.trainer.epochs_enc2}_{cfg.trainer.nu}"
 
     ae_path_save = f"./models/{basic_info}_ae.pth"
     center_path_save = f"./models/{basic_info}_center.pth"
     enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
-    enc_path_save_do2hsc = f"./models/{basic_info}_enc_do2hsc.pth"
+    enc_path_save_do2hsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_enc_do2hsc.pth"
 
     #################### Logger ####################
 
@@ -85,26 +79,40 @@ def main(cfg:DictConfig) -> Optional[float]:
     if not os.path.exists(ae_path_save):
         opt_ae = hydra.utils.instantiate(cfg.trainer.optimizer, model_ae.parameters())
         scheduler_ae = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_ae)
-        trainer_ae = hydra.utils.instantiate(cfg.trainer.build, model=model_ae, optimizer=opt_ae, train_loader=train_loader, test_loader=test_loader, scheduler=scheduler_ae, logger_kwargs=logger_set, device=device)
+        trainer_ae = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_ae, optimizer=opt_ae, train_loader=train_loader, test_loader=test_loader, scheduler=scheduler_ae, logger_kwargs=logger_set, device=device)
         trainer_ae.train_ae(cfg.trainer.epochs_ae)
         trainer_ae.center() # to get the center of the latent space
         trainer_ae.save_model(ae_path_save,center_path_save)
         print("Center and model are initialized")
-    if not os.path.exists(enc_path_save_dohsc) and cfg.trainer.method != 'do2hsc':
+    else: print("AE model was trained before")
+    if not os.path.exists(enc_path_save_dohsc) and cfg.trainer.method == 'dohsc':
     ####### encoder training (DOHSC)
         print("Starting DOHSC")
         model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
         load_center = torch.load(center_path_save)
         opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
         scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
-        trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, logger_kwargs=logger_set, device=device)
+        trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, logger_kwargs=logger_set, device=device)
         trainer_dohsc.inference()
         trainer_dohsc.train_enc(cfg.trainer.epochs_enc, cfg.trainer.monitor)
         trainer_dohsc.inference()
         trainer_dohsc.save_model_enc(enc_path_save_dohsc)
         print("DOHSC is done and model is saved")
+    else: print("DOHSC was done before")
+    if not os.path.exists(enc_path_save_do2hsc) and cfg.trainer.method == 'do2hsc':
+        ####### encoder training (DO2HSC)
+        print("Starting DO2HSC")
+        model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
+        load_center = torch.load(center_path_save)
+        opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
+        scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
+        trainer_do2hsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, logger_kwargs=logger_set, device=device)
+        trainer_do2hsc.inference()
+        trainer_do2hsc.train_enc(cfg.trainer.epochs_enc2, cfg.trainer.monitor)
+        trainer_do2hsc.inference()
+        trainer_do2hsc.save_model_enc(enc_path_save_do2hsc)
+        print("DO2HSC is done and model is saved")
     else: print("For DO2HSC later")
-    ####### encoder training (DO2HSC)
 
 if __name__ == "__main__":
     main()
