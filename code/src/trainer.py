@@ -43,6 +43,9 @@ class Trainer:
         # send model to device
         self.model.to(self.device)
 
+        # send center to device
+        self.C.to(self.device)
+
         # attributes        
         self.train_loss_ = []
         self.test_loss_ = []

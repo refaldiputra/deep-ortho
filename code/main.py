@@ -10,6 +10,7 @@ import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 from src.model import AEOrtho, EncOrtho, MLP
 import numpy as np
+from src.utils import get_data_dir
 #from torch.utils.tensorboard import SummaryWriter
 
 log = logging.getLogger(__name__) # logger for the main function
@@ -38,6 +39,7 @@ def main(cfg: DictConfig) -> Optional[float]:
 
     #################### Wandb Configuration ####################
     ### This is for the wandb configuration when combined with hydra
+    wandb.login(key='a0c6d8a4a5a10e28e40d0086c3a2ff2103cad502') # for in the cloud
     wandb.init(entity=cfg.wandb.entity, 
                project = cfg.wandb.project,
                name = basic_info, # for the name of the run
@@ -49,13 +51,15 @@ def main(cfg: DictConfig) -> Optional[float]:
     )
 
     #################### Save Path ####################
-    ae_path_save = f"./models/{basic_info}_ae.pth"
-    center_path_save = f"./models/{basic_info}_center.pth"
-    enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
-    enc_path_save_dohsc_init = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_enc_dohsc_init.pth"
-    rmax_path_save = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmax.pth"
-    rmin_path_save = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmin.pth"
-    enc_path_save_do2hsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc3}_enc_do2hsc.pth"
+    model_dir = get_data_dir('models')
+    
+    ae_path_save = f"{model_dir}/{basic_info}_ae.pth"
+    center_path_save = f"{model_dir}/{basic_info}_center.pth"
+    enc_path_save_dohsc = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
+    enc_path_save_dohsc_init = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_enc_dohsc_init.pth"
+    rmax_path_save = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmax.pth"
+    rmin_path_save = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmin.pth"
+    enc_path_save_do2hsc = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc3}_enc_do2hsc.pth"
 
     #################### Logger ####################
 
@@ -100,7 +104,7 @@ def main(cfg: DictConfig) -> Optional[float]:
     ####### encoder training (DOHSC)
         print("Starting DOHSC")
         model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
-        load_center = torch.load(center_path_save)
+        load_center = torch.load(center_path_save).to(device)
         opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
         scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
         trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, logger_kwargs=logger_set, device=device)
@@ -116,7 +120,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         #### DOSHC first to get the biradii
         if not os.path.exists(rmax_path_save) and not os.path.exists(rmin_path_save):
             model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
-            load_center = torch.load(center_path_save)
+            load_center = torch.load(center_path_save).to(device)
             opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
             scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
             trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, method='dohsc', model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, logger_kwargs=logger_set, device=device)
@@ -134,7 +138,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         trainer_do2hsc.inference()
         trainer_do2hsc.save_model_enc(enc_path_save_do2hsc)
         print("DO2HSC is done and model is saved")
-    else: print("For DO2HSC was done before")
+    else: print("For DO2HSC was done before or not being called")
 
 if __name__ == "__main__":
     main()
