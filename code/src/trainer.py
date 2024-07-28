@@ -3,6 +3,7 @@ import logging
 import warnings
 import torch
 import numpy as np
+import wandb
 from sklearn.metrics import roc_auc_score
 
 class Trainer:
@@ -79,6 +80,7 @@ class Trainer:
                 epoch_time,
                 **self.logger_kwargs
             )
+            wandb.log({"train_loss_ae": epoch_loss, "epoch": epoch+1})
 
         total_time = time.time() - total_start_time
 
@@ -91,6 +93,7 @@ class Trainer:
     def train_enc(self, epochs, monitor= False):
         # the model is the encoder
         total_start_time = time.time()
+        loss_curve = []
         for epoch in range(epochs):
             self.model.train() # make sure the model is in training mode
             total_loss = 0
@@ -109,7 +112,10 @@ class Trainer:
                 self.optimizer.step()
                 total_loss += loss_enc.item()
             epoch_loss = total_loss / len(self.train_loader) # average loss per epoch
+            loss_curve.append(epoch_loss)
             # print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
+
+            wandb.log({"train_loss_enc": epoch_loss, "epoch": epoch+1})
             self.scheduler.step()
 
             # logging by epoch
@@ -130,8 +136,19 @@ class Trainer:
                 epoch_inference = 1
             if (epoch+1) % epoch_inference == 0 and monitor:
                 self.inference()
+                wandb.log({"auc": self.auc, "epoch": epoch+1})
 
         total_time = time.time() - total_start_time
+        data = [[x+1, y] for (x, y) in zip(range(epochs), loss_curve)]
+        table_loss = wandb.Table(data=data, columns=["epoch", "loss"])
+        wandb.log(
+            {
+            "loss_curve_plot": wandb.plot.line(
+                table_loss, "epoch", "loss", title="Learning Curve"
+                )
+            }
+        )
+
 
         # final message
         logging.info(
@@ -226,13 +243,18 @@ class Trainer:
                 self.get_biradius(dist_sqrt, self.nu)
                 # get the anomaly scores
                 scores = (dist_sqrt - self.r_max) * (dist_sqrt-self.r_min)
-            # assign the labels based on the scores
-            scores[scores < 0] = int(0) #normal
-            scores[scores > 0] = int(1) #anomaly
             # calculate the AUC, note the higher the better
             # ROC AUC is intrepreted as the probability that a random positive sample will have a higher score than a random negative sample
             # AUC = 0.5 means random guessing
-            self.auc = roc_auc_score(labels, scores.astype(int))
+            self.auc = roc_auc_score(labels, scores)
+            # plot the ROC curve in wandb, require specific format
+            scores_proba = np.zeros((len(scores), 2))
+            for i in range(len(scores_proba)):
+                if scores[i] < 0:
+                    scores_proba[i] = np.array([1.0, 0.0])
+                else:
+                    scores_proba[i] = np.array([0.0, 1.0])
+            wandb.log({"plot_roc": wandb.plot.roc_curve(labels, scores_proba)})
             test_time = time.time() - start_time
             logging.info(f"AUC: {self.auc}")
             logging.info(f"End of inference. Total time: {round(test_time, 5)} seconds")

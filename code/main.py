@@ -1,23 +1,24 @@
 import os
 import wandb
 import hydra
+import time
 from typing import Optional
 import omegaconf
 from omegaconf import DictConfig
 import logging
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
-from src.model import AEOrtho, EncOrtho
+from src.model import AEOrtho, EncOrtho, MLP
 import numpy as np
 #from torch.utils.tensorboard import SummaryWriter
 
 log = logging.getLogger(__name__) # logger for the main function
 
 # this is the preambule for the hydra configuration
-@hydra.main(config_path="./confs", config_name="config.yaml", version_base="1.2")
+@hydra.main(config_path="./confs", config_name="config", version_base="1.2")
 
-def main(cfg:DictConfig) -> Optional[float]:
-    ## random seed configuration, for reproducibility
+def main(cfg: DictConfig) -> Optional[float]:
+    #################### Device Setting ####################
     torch.manual_seed(cfg.seed)
     torch.cuda.manual_seed(cfg.seed)
     torch.cuda.manual_seed_all(cfg.seed)
@@ -27,12 +28,6 @@ def main(cfg:DictConfig) -> Optional[float]:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('You are using: ', device)
 
-    ### This is for the wandb configuration when combined with hydra
-    wandb.config = omegaconf.OmegaConf.to_container(cfg, 
-    resolve=True
-    ,throw_on_missing=True
-    )
-    # wandb.init(entity=cfg.wandb.entity, project = cfg.wandb.project) # for sending results to wandb
     #################### Name Handler ####################
     # for a code of this run as well as for the save path of the model
     # basic information is data_code, normal class, model_code, method, and nu
@@ -41,6 +36,19 @@ def main(cfg:DictConfig) -> Optional[float]:
     basic_info = f"{cfg.seed}_{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}"
     detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}_{cfg.trainer.epochs_enc2}_{cfg.trainer.nu}"
 
+    #################### Wandb Configuration ####################
+    ### This is for the wandb configuration when combined with hydra
+    wandb.init(entity=cfg.wandb.entity, 
+               project = cfg.wandb.project,
+               name = basic_info, # for the name of the run
+               id = time.strftime("%Y%m%d-%H%M%S"), # for the id of the run
+               ) # for sending results to wandb, must be done first
+    wandb.config = omegaconf.OmegaConf.to_container(cfg, 
+    resolve=True,
+    throw_on_missing=True
+    )
+
+    #################### Save Path ####################
     ae_path_save = f"./models/{basic_info}_ae.pth"
     center_path_save = f"./models/{basic_info}_center.pth"
     enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
@@ -59,7 +67,7 @@ def main(cfg:DictConfig) -> Optional[float]:
     # if we want to change the class, we need to override the data.build
     if cfg.data.code == 'mnist':
         train_loader, test_loader = hydra.utils.instantiate(cfg.data.build).get_mnist()
-    else: #cifar
+    else: #cifar, default
         data = hydra.utils.instantiate(cfg.data.build)
         train_loader, test_loader = data.get_loaders(cfg.data.batch_size)
 
