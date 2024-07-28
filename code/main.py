@@ -44,7 +44,10 @@ def main(cfg:DictConfig) -> Optional[float]:
     ae_path_save = f"./models/{basic_info}_ae.pth"
     center_path_save = f"./models/{basic_info}_center.pth"
     enc_path_save_dohsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc}_enc_dohsc.pth"
-    enc_path_save_do2hsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_enc_do2hsc.pth"
+    enc_path_save_dohsc_init = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_enc_dohsc_init.pth"
+    rmax_path_save = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmax.pth"
+    rmin_path_save = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmin.pth"
+    enc_path_save_do2hsc = f"./models/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc3}_enc_do2hsc.pth"
 
     #################### Logger ####################
 
@@ -98,21 +101,32 @@ def main(cfg:DictConfig) -> Optional[float]:
         trainer_dohsc.inference()
         trainer_dohsc.save_model_enc(enc_path_save_dohsc)
         print("DOHSC is done and model is saved")
-    else: print("DOHSC was done before")
+    else: print("DOHSC was done before or doing DO2HSC")
     if not os.path.exists(enc_path_save_do2hsc) and cfg.trainer.method == 'do2hsc':
         ####### encoder training (DO2HSC)
         print("Starting DO2HSC")
-        model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
-        load_center = torch.load(center_path_save)
-        opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
-        scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
-        trainer_do2hsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, logger_kwargs=logger_set, device=device)
+        #### DOSHC first to get the biradii
+        if not os.path.exists(rmax_path_save) and not os.path.exists(rmin_path_save):
+            model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
+            load_center = torch.load(center_path_save)
+            opt_enc = hydra.utils.instantiate(cfg.trainer.optimizer_enc, model_enc.parameters())
+            scheduler = hydra.utils.instantiate(cfg.trainer.scheduler_multi, optimizer=opt_enc)
+            trainer_dohsc = hydra.utils.instantiate(cfg.trainer.build, method='dohsc', model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, logger_kwargs=logger_set, device=device)
+            trainer_dohsc.train_enc(cfg.trainer.epochs_enc2, cfg.trainer.monitor) # train dohsc first
+            r_max, r_min = trainer_dohsc.biradius()
+            trainer_dohsc.save_model_biradius(enc_path_save_dohsc_init,rmax_path_save, rmin_path_save)
+        else:
+            model_enc.load_state_dict(torch.load(enc_path_save_dohsc_init), strict=False)
+            r_max = torch.load(rmax_path_save)
+            r_min = torch.load(rmin_path_save)
+        #### Then, DO2HSC
+        trainer_do2hsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, r_max=r_max, r_min=r_min, logger_kwargs=logger_set, device=device)
         trainer_do2hsc.inference()
-        trainer_do2hsc.train_enc(cfg.trainer.epochs_enc2, cfg.trainer.monitor)
+        trainer_do2hsc.train_enc(cfg.trainer.epochs_enc3, cfg.trainer.monitor)
         trainer_do2hsc.inference()
         trainer_do2hsc.save_model_enc(enc_path_save_do2hsc)
         print("DO2HSC is done and model is saved")
-    else: print("For DO2HSC later")
+    else: print("For DO2HSC was done before")
 
 if __name__ == "__main__":
     main()

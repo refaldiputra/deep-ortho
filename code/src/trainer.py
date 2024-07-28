@@ -21,6 +21,8 @@ class Trainer:
         scheduler=None, # learning rate scheduler
         center=None, # center of the latent space
         nu = 0.3, # the quantile decision
+        r_max = None, # the bi-radius for do2hsc
+        r_min = None, # the bi-radius for do2hsc
         logger_kwargs=None, # for the logging
         device=None # device to use
     ):
@@ -32,6 +34,8 @@ class Trainer:
         self.scheduler = scheduler
         self.C = center
         self.nu = nu
+        self.r_max = r_max
+        self.r_min = r_min
         self.logger_kwargs = logger_kwargs
         self.device = self._get_device(device)
         
@@ -219,9 +223,9 @@ class Trainer:
             else: # do2hsc
                 dist_sqrt = np.sqrt(dists)
                 # get the bi-radii based on the quantile
-                r_max,r_min = self.get_biradius(dist_sqrt, self.nu)
+                self.get_biradius(dist_sqrt, self.nu)
                 # get the anomaly scores
-                scores = (dist_sqrt - r_max) * (dist_sqrt-r_min)
+                scores = (dist_sqrt - self.r_max) * (dist_sqrt-self.r_min)
             # assign the labels based on the scores
             scores[scores < 0] = int(0) #normal
             scores[scores > 0] = int(1) #anomaly
@@ -254,6 +258,29 @@ class Trainer:
             # below is the trick for stability
             self.C[(abs(self.C) < eps) & (self.C < 0)] = -eps
             self.C[(abs(self.C) < eps) & (self.C > 0)] = eps
+
+    def biradius(self):
+        # get the bi-radius from the training data
+        # model should be encoder
+        self.model.eval()
+        with torch.no_grad():
+            Z = []
+            for features, labels, _ in self.train_loader:
+                # move to device
+                features, labels = self._to_device(
+                    features.float(), 
+                    labels, 
+                    self.device
+                )
+                
+                comp_features  = self.model(features)
+                Z.append(comp_features.cpu())
+            Z = torch.cat(Z, dim=0)
+            dist = self._compute_dists(Z, self.C)
+            dist_sqrt = torch.sqrt(dist)
+            self.r_max, self.r_min = self.get_biradius(dist_sqrt, self.nu)
+
+        return self.r_max, self.r_min
     
     def save_model(self, path_model, path_center):
         '''
@@ -273,12 +300,23 @@ class Trainer:
             raise ValueError('Center is not initialized')
         torch.save(self.model.state_dict(), path_model_enc)
 
+    def save_model_biradius(self, path_model, path_rmax, path_rmin):
+        '''
+        Model should be encoder after DO2HSC
+        '''
+        if self.r_max is None or self.r_min is None: #just in case
+            raise ValueError('Radius is not initialized')
+        torch.save(self.model.state_dict(), path_model)
+        torch.save(self.r_max, path_rmax)
+        torch.save(self.r_min, path_rmin)
+
     def get_radius(self, dist, nu: float):
         """Optimally solve for radius R via the (1-nu)-quantile of distances."""
         return np.quantile(np.sqrt(dist), 1 - nu)
     
     def get_biradius(self, dist_sqrt, nu):
-        r_min = np.quantile(dist_sqrt, nu)
-        r_max = np.quantile(dist_sqrt, 1 - nu)
-        return r_max, r_min
+        self.r_min = np.quantile(dist_sqrt, nu)
+        self.r_max = np.quantile(dist_sqrt, 1 - nu)
+
+        return self.r_max, self.r_min
             

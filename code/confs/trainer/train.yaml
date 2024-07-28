@@ -17,9 +17,10 @@ scheduler_multi:
   _target_: torch.optim.lr_scheduler.MultiStepLR
   milestones: [750]
   gamma : 0.1 
-epochs_ae: 10
-epochs_enc: 20
-epochs_enc2: 20
+epochs_ae: 10 # center initialization
+epochs_enc: 20 # dohsc
+epochs_enc2: 20 # dohsc initialization
+epochs_enc3: 20 # do2hsc
 monitor: False
 nu : 0.5
 save_path: './models'
