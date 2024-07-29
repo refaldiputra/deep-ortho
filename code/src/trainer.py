@@ -111,12 +111,19 @@ class Trainer:
                 feature, label = self._to_device(feature.float(), label, self.device)
                 self.optimizer.zero_grad()
                 z = self.model(feature) # get the compressed representation
+                ### Base
+                if self.method == 'base':
+                    loss_enc = self._compute_scores(z, self.C)
                 ### DOHSC
                 # loss is the distance between the compressed representation and the center
                 # loss function by nu, this is known as soft-boundary deep SVDD: http://proceedings.mlr.press/v80/ruff18a/ruff18a.pdf
                 # I found this has faster convergence
                 # loss_enc = self._compute_scores(z, self.C)
-                loss_enc = self._compute_scores_nu(z, self.C, self.nu) 
+                elif self.method == 'dohsc':
+                    loss_enc = self._compute_scores_nu(z, self.C, self.nu)
+                ### DO2HSC
+                elif self.method == 'do2hsc':
+                    loss_enc = self._compute_scores_do2shc(z, self.C, self.r_min, self.r_max)
                 loss_enc.backward()
                 self.optimizer.step()
                 total_loss += loss_enc.item()
@@ -241,7 +248,7 @@ class Trainer:
             labels, dists = zip(*label_dist)
             labels = np.array(labels)
             dists = np.array(dists)
-            if self.method == 'dohsc':
+            if self.method == 'dohsc' or self.method == 'base':
                 # get the radius based on the quantile
                 r = self.get_radius(dists, self.nu)
                 # get the anomaly scores
