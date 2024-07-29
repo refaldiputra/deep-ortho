@@ -216,8 +216,8 @@ class Trainer:
         This loss function considers the anomaly scores directly
         '''
         dist = torch.sum((vector1 - vector2)**2, dim=tuple(range(1, vector1.dim())))
-        d_min = torch.maximum(dist, rmin**2) # will return another vector
-        d_max = torch.minimum(dist, rmax**2)
+        d_min = torch.maximum(dist, torch.tensor(rmin)**2) # will return another vector
+        d_max = torch.minimum(dist, torch.tensor(rmax)**2)
         r_gap = rmax**2 - rmin**2
         scores = d_max - d_min - r_gap
         return torch.mean(scores)

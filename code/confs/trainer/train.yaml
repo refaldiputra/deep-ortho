@@ -20,7 +20,7 @@ scheduler_multi:
 epochs_ae: 10 # center initialization
 epochs_enc: 20 # dohsc
 epochs_enc2: 20 # dohsc initialization
-epochs_enc3: 40 # do2hsc
+epochs_enc3: 200 # do2hsc
 monitor: False
 nu : 0.5
 save_path: './models'
