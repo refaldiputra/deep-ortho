@@ -46,6 +46,11 @@ class Trainer:
         # send center to device
         if self.C != None:
             self.C.to(self.device)
+        
+        # send r_min,r_max to device
+        if self.r_max != None and self.r_min!=None:
+            self.r_max.to(self.device)
+            self.r_min.to(self.device)        
 
         # attributes        
         self.train_loss_ = []
@@ -94,7 +99,7 @@ class Trainer:
         )
 
 
-    def train_enc(self, epochs, monitor= False):
+    def train_enc(self, epochs, monitor= False, name_loss='train_loss_enc',log_epoch= 'epoch_enc',):
         # the model is the encoder
         total_start_time = time.time()
         loss_curve = []
@@ -119,7 +124,7 @@ class Trainer:
             loss_curve.append(epoch_loss)
             # print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
 
-            wandb.log({"train_loss_enc": epoch_loss, "epoch_enc": epoch+1})
+            wandb.log({str(name_loss): epoch_loss, str(log_epoch): epoch+1})
             self.scheduler.step()
 
             # logging by epoch
@@ -301,11 +306,12 @@ class Trainer:
                 )
                 
                 comp_features  = self.model(features)
-                Z.append(comp_features.cpu())
+                Z.append(comp_features)
             Z = torch.cat(Z, dim=0)
             dist = self._compute_dists(Z, self.C)
-            dist_sqrt = torch.sqrt(dist)
+            dist_sqrt = torch.sqrt(dist).cpu() # need to get to the cpu
             self.r_max, self.r_min = self.get_biradius(dist_sqrt, self.nu)
+            self.r_max, self.r_min = torch.tensor(self.r_max), torch.tensor(self.r_min) # return it again to tensor
 
         return self.r_max, self.r_min
     
@@ -341,7 +347,7 @@ class Trainer:
         """Optimally solve for radius R via the (1-nu)-quantile of distances."""
         return np.quantile(np.sqrt(dist), 1 - nu)
     
-    def get_biradius(self, dist_sqrt, nu):
+    def get_biradius(self, dist_sqrt, nu: float):
         self.r_min = np.quantile(dist_sqrt, nu)
         self.r_max = np.quantile(dist_sqrt, 1 - nu)
 

@@ -46,10 +46,11 @@ def main(cfg: DictConfig) -> Optional[float]:
     #################### Wandb Configuration ####################
     ### This is for the wandb configuration when combined with hydra
     wandb.login(key='a0c6d8a4a5a10e28e40d0086c3a2ff2103cad502') # for in the cloud
-    wandb.init(entity=cfg.wandb.entity, 
+    run = wandb.init(entity=cfg.wandb.entity, 
                project = cfg.wandb.project,
                name = basic_info, # for the name of the run
                id = time.strftime("%Y%m%d-%H%M%S"), # for the id of the run
+               group = cfg.wandb.group # grouping the runs
                ) # for sending results to wandb, must be done first
     wandb.config = omegaconf.OmegaConf.to_container(cfg, 
     resolve=True,
@@ -141,7 +142,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         #### Then, DO2HSC
         trainer_do2hsc = hydra.utils.instantiate(cfg.trainer.build, method=cfg.trainer.method, model=model_enc, optimizer=opt_enc,train_loader=train_loader, test_loader=test_loader, scheduler=scheduler, center=load_center, nu = cfg.trainer.nu, r_max=r_max, r_min=r_min, logger_kwargs=logger_set, device=device)
         trainer_do2hsc.inference()
-        trainer_do2hsc.train_enc(cfg.trainer.epochs_enc3, cfg.trainer.monitor)
+        trainer_do2hsc.train_enc(cfg.trainer.epochs_enc3,cfg.trainer.monitor,'train_loss_enc2','epoch_enc2') # logging under train_loss_enc2 vs epoch_enc2
         trainer_do2hsc.inference()
         trainer_do2hsc.save_model_enc(enc_path_save_do2hsc)
         print("DO2HSC is done and model is saved")

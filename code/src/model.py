@@ -104,7 +104,7 @@ class AE(nn.Module):
 
     def forward(self, x):
         z = self.encoder(x)
-        z = z.view(z.size(0), -1)
+        z = z.view(z.size(0), -1) # flatten
         z = self.mid(z)
         x_ = self.relu(z)
         x_ = x_.view(x_.size(0), -1, 4, 4) # 4 is fixed here to create a compressed representation
