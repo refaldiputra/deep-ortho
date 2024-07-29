@@ -84,7 +84,7 @@ class Trainer:
                 epoch_time,
                 **self.logger_kwargs
             )
-            wandb.log({"train_loss_ae": epoch_loss, "epoch": epoch+1})
+            wandb.log({"train_loss_ae": epoch_loss, "epoch_ae": epoch+1})
 
         total_time = time.time() - total_start_time
 
@@ -119,7 +119,7 @@ class Trainer:
             loss_curve.append(epoch_loss)
             # print(f"Epoch: {epoch+1}, Train Loss: {epoch_loss}")
 
-            wandb.log({"train_loss_enc": epoch_loss, "epoch": epoch+1})
+            wandb.log({"train_loss_enc": epoch_loss, "epoch_enc": epoch+1})
             self.scheduler.step()
 
             # logging by epoch
@@ -133,14 +133,14 @@ class Trainer:
             )
 
             # inference when epochs is module epoch_inference
-            epoch_inference = epochs // 2
+            epoch_inference = epochs // 5
             try:
                 (epoch+1) % epoch_inference
             except ZeroDivisionError:
                 epoch_inference = 1
             if (epoch+1) % epoch_inference == 0 and monitor:
                 self.inference()
-                wandb.log({"auc": self.auc, "epoch": epoch+1})
+                wandb.log({"epoch_inf": epoch+1})
 
         total_time = time.time() - total_start_time
         data = [[x+1, y] for (x, y) in zip(range(epochs), loss_curve)]
@@ -259,6 +259,7 @@ class Trainer:
                 else:
                     scores_proba[i] = np.array([0.0, 1.0])
             wandb.log({"plot_roc": wandb.plot.roc_curve(labels, scores_proba)})
+            wandb.log({"auc":self.auc})
             test_time = time.time() - start_time
             logging.info(f"AUC: {self.auc}")
             logging.info(f"End of inference. Total time: {round(test_time, 5)} seconds")

@@ -16,7 +16,7 @@ from src.utils import get_data_dir
 log = logging.getLogger(__name__) # logger for the main function
 
 # this is the preambule for the hydra configuration
-@hydra.main(config_path="./confs", config_name="config.yaml", version_base="1.2")
+@hydra.main(config_path="./confs", config_name="config", version_base="1.2")
 
 def main(cfg: DictConfig) -> Optional[float]:
     #################### Device Setting ####################
@@ -36,6 +36,12 @@ def main(cfg: DictConfig) -> Optional[float]:
 
     basic_info = f"{cfg.seed}_{cfg.data.code}_{cfg.data.build.normal}_{cfg.model.code}_{cfg.trainer.method}"
     detailed_info = basic_info + f"_{cfg.trainer.optimizer.lr}_{cfg.trainer.optimizer.weight_decay}_{cfg.trainer.optimizer_enc.lr}_{cfg.trainer.optimizer_enc.weight_decay}_{cfg.trainer.epochs_ae}_{cfg.trainer.epochs_enc}_{cfg.trainer.epochs_enc2}_{cfg.trainer.nu}"
+
+    #################### Logger ####################
+
+    log.info("This run is for %s", detailed_info)
+    log.info("The run name should be %s", basic_info)
+    logger_set = {'show':True, 'update_step':2}
 
     #################### Wandb Configuration ####################
     ### This is for the wandb configuration when combined with hydra
@@ -60,11 +66,6 @@ def main(cfg: DictConfig) -> Optional[float]:
     rmax_path_save = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmax.pth"
     rmin_path_save = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc2}_rmin.pth"
     enc_path_save_do2hsc = f"{model_dir}/{basic_info}_{cfg.trainer.nu}_{cfg.trainer.epochs_enc3}_enc_do2hsc.pth"
-
-    #################### Logger ####################
-
-    log.info("This run is for %s", detailed_info)
-    logger_set = {'show':True, 'update_step':2}
 
     #################### Data ####################
     # we are going to have normal data and outlier data (2 kind only and fix the class)
@@ -146,8 +147,11 @@ def main(cfg: DictConfig) -> Optional[float]:
         print("DO2HSC is done and model is saved")
     else: print("For DO2HSC was done before or not being called")
 
+    wandb.finish() # ending the run in wandb
+
 if __name__ == "__main__":
     main()
+    wandb.finish()
 
 
 
