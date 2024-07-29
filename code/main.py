@@ -109,7 +109,7 @@ def main(cfg: DictConfig) -> Optional[float]:
         print("Center and model are initialized")
     else: print("AE model was trained before")
     if not os.path.exists(enc_path_save_dohsc) and (cfg.trainer.method == 'dohsc' or cfg.trainer.method == 'base'):
-    ####### encoder training (DOHSC)
+    ####### encoder training (DOHSC or Baseline)
         print("Starting DOHSC")
         model_enc.load_state_dict(torch.load(ae_path_save), strict=False)
         load_center = torch.load(center_path_save).to(device)
