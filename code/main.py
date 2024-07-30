@@ -45,7 +45,6 @@ def main(cfg: DictConfig) -> Optional[float]:
 
     #################### Wandb Configuration ####################
     ### This is for the wandb configuration when combined with hydra
-    wandb.login(key='a0c6d8a4a5a10e28e40d0086c3a2ff2103cad502') # for in the cloud
     run = wandb.init(entity=cfg.wandb.entity, 
                project = cfg.wandb.project,
                name = basic_info, # for the name of the run

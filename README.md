@@ -3,23 +3,55 @@ Implementation of the paper "Deep Orthogonal Hypersphere Compression for Anomaly
 
 By: Refaldi Intri Dwi Putra -  Department of Information and Communication Engineering, The University of Tokyo
 
-Created as a final report for Visual Media 2024.
+Created with the purpose for final report on Visual Media 2024.
 
 This repo is structured as         
     
     .
     ├── code      
     │    ├── confs          <- Hydra       
-    │    ├── logs           <- log outputs
-    │    ├── scripts        <- Shell
     │    ├── src            <- Program code
-    │    └── analysis.ipynb <- Data analysis
+    │    ├── main.py        <- Main program
+    │    └── analysis.ipynb <- Data and model analysis
     ├── README.md
     └── report.pdf          <- Report for this class
-## What's in this report?
+## How to run it?
 
-- A 6-pages report named "report.pdf" that describing the detail of chosen paper, its contributions, and overview of the proposed approach. The report also includes my attempt to implement some of their results.
+We need to install:
 
-## How is my implementation in code?
+`pip install torch torchvision hydra-core wandb`
 
-- This can be seen in the code folder part and its detail is in the README2.md inside the folder.
+To run it one can use bash shell with command:
+
+`cd code`
+
+`python main.py`
+
+Since we use Hydra, we can add the hyperparameters directly from the command line for example
+
+`python main.py trainer.optimizer_enc.weight_decay=1e-2`
+
+A folder ./outputs, ./data , and ./models will be automatically created
+
+You also need to login to wandb in case you want to use it.
+
+## What's in the report?
+
+The report `report.pdf` contains summary of the paper with more details on math but for simpler review can be found in this [Notion page](https://pumped-ring-6b0.notion.site/Implementation-of-Deep-Orthogonal-Hypersphere-Compression-for-Anomaly-Detection-ICLR-24-5ee46279f1d5410b88ee9267b4e48950?pvs=4).
+
+## My implementation vs them?
+
+This is the DOSHC result AUC mine vs them in CIFAR-10 dataset.
+
+Class | My Implementation | Their Results 
+--- | --- | ---  
+airplane | 0.78 | 0.80
+automobile |0.80| 0.81
+bird | 0.71 | 0.70 
+cat |0.83 | 0.68 
+deer |0.71 | 0.72
+dog |0.65 | 0.72 
+frog |0.62 | 0.83 
+horse |0.63 | 0.74 
+ship |0.77 | 0.83 
+truck |0.77 | 0.81 
