@@ -31,7 +31,7 @@ Since we use Hydra, we can add the hyperparameters directly from the command lin
 
 `python main.py trainer.optimizer_enc.weight_decay=1e-2`
 
-A folder `./outputs`, `./data` , and `./models` will be automatically created
+Folders `./outputs`, `./data` , and `./models` will be automatically created
 
 You also need to log in to wandb in case you want to use it.
 
