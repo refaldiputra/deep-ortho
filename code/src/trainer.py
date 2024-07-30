@@ -123,8 +123,8 @@ class Trainer:
                     loss_enc = self._compute_scores_nu(z, self.C, self.nu)
                 ### DO2HSC
                 elif self.method == 'do2hsc':
-                    # loss_enc = self._compute_scores_do2shc(z, self.C, self.r_min, self.r_max)
-                    loss_enc = self._compute_scores_do2shc_nu(z, self.C, self.r_min, self.r_max)
+                    loss_enc = self._compute_scores_do2shc(z, self.C, self.r_min, self.r_max)
+                    #loss_enc = self._compute_scores_do2shc_nu(z, self.C, self.r_min, self.r_max)
                 loss_enc.backward()
                 self.optimizer.step()
                 total_loss += loss_enc.item()
@@ -206,8 +206,8 @@ class Trainer:
     def _compute_scores_do2shc(self, vector1, vector2, rmin, rmax):
         d = vector1 - vector2
         d = d.abs()
-        d_min = torch.maximum(d, rmin) # will return another vector
-        d_max = torch.minimum(d, rmax)
+        d_min = torch.minimum(d, torch.tensor(rmin)) # will return another vector
+        d_max = torch.maximum(d, torch.tensor(rmax))
         scores = torch.sum(d_max - d_min, dim=tuple(range(1, vector1.dim())))
         return torch.mean(scores)
     
@@ -216,10 +216,10 @@ class Trainer:
         This loss function considers the anomaly scores directly
         '''
         dist = torch.sum((vector1 - vector2)**2, dim=tuple(range(1, vector1.dim())))
-        d_min = torch.maximum(dist, torch.tensor(rmin)**2) # will return another vector
-        d_max = torch.minimum(dist, torch.tensor(rmax)**2)
+        d_min = torch.minimum(dist, torch.tensor(rmin)**2) # will return another vector
+        d_max = torch.maximum(dist, torch.tensor(rmax)**2)
         r_gap = rmax**2 - rmin**2
-        scores = d_max - d_min - r_gap
+        scores = d_max - d_min -  torch.tensor(r_gap)
         return torch.mean(scores)
 
     
