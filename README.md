@@ -1,9 +1,9 @@
 # deep-ortho
-Implementation of the paper "Deep Orthogonal Hypersphere Compression for Anomaly Detection", spotlight in ICLR 2024.
+Implementation of the paper "Deep Orthogonal Hypersphere Compression for Anomaly Detection", a spotlight in ICLR 2024.
 
 By: Refaldi Intri Dwi Putra -  Department of Information and Communication Engineering, The University of Tokyo
 
-Created with the purpose for final report on Visual Media 2024.
+Created with the purpose of the final report on Visual Media S/2024.
 
 This repo is structured as         
     
@@ -21,7 +21,7 @@ We need to install:
 
 `pip install torch torchvision hydra-core wandb`
 
-To run it one can use bash shell with command:
+To run it one can use the command in the terminal:
 
 `cd code`
 
@@ -31,17 +31,17 @@ Since we use Hydra, we can add the hyperparameters directly from the command lin
 
 `python main.py trainer.optimizer_enc.weight_decay=1e-2`
 
-A folder ./outputs, ./data , and ./models will be automatically created
+A folder `./outputs`, `./data` , and `./models` will be automatically created
 
-You also need to login to wandb in case you want to use it.
+You also need to log in to wandb in case you want to use it.
 
 ## What's in the report?
 
-The report `report.pdf` contains summary of the paper with more details on math but for simpler review can be found in this [Notion page](https://pumped-ring-6b0.notion.site/Implementation-of-Deep-Orthogonal-Hypersphere-Compression-for-Anomaly-Detection-ICLR-24-5ee46279f1d5410b88ee9267b4e48950?pvs=4).
+The report `report.pdf` contains a summary of the paper with more details on math but for simpler review can be found in this [Notion page](https://pumped-ring-6b0.notion.site/Implementation-of-Deep-Orthogonal-Hypersphere-Compression-for-Anomaly-Detection-ICLR-24-5ee46279f1d5410b88ee9267b4e48950?pvs=4).
 
 ## My implementation vs them?
 
-This is the DOSHC result AUC mine vs them in CIFAR-10 dataset.
+This is the DOSHC result from the AUC mine vs them in the CIFAR-10 dataset.
 
 Class | My Implementation | Their Results 
 --- | --- | ---  
