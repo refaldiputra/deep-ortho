@@ -37,7 +37,7 @@ You also need to log in to wandb in case you want to use it.
 
 ## What's in the report?
 
-The report `report.pdf` contains a summary of the paper with more details on math but for simpler review can be found in this [Notion page](https://pumped-ring-6b0.notion.site/Implementation-of-Deep-Orthogonal-Hypersphere-Compression-for-Anomaly-Detection-ICLR-24-5ee46279f1d5410b88ee9267b4e48950?pvs=4).
+The report `report.pdf` contains a summary of the paper with more details on math but for simpler review can be found on this [Notion page](https://pumped-ring-6b0.notion.site/Implementation-of-Deep-Orthogonal-Hypersphere-Compression-for-Anomaly-Detection-ICLR-24-5ee46279f1d5410b88ee9267b4e48950?pvs=4).
 
 ## My implementation vs them?
 
@@ -55,3 +55,5 @@ frog |0.62 | 0.83
 horse |0.63 | 0.74 
 ship |0.77 | 0.83 
 truck |0.77 | 0.81 
+
+More details can be found on this wandb [report](https://api.wandb.ai/links/refaldiputra/xe285ujg).
